@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Cdrama Tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏮</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>🏮 Cdrama Tracker</h1>
+    <span id="updated" class="muted"></span>
+  </div>
+  <input id="q" type="search" placeholder="Search title, actor, director, tag…" autocomplete="off">
+</header>
+
+<nav class="tabs" id="tabs" role="tablist">
+  <button data-tab="upcoming">Upcoming <b></b></button>
+  <button data-tab="airing">Airing now <b></b></button>
+  <button data-tab="hot">🔥 Hot now <b></b></button>
+  <button data-tab="mine">My list <b></b></button>
+  <button data-tab="all">All <b></b></button>
+</nav>
+
+<section class="controls">
+  <label>Sort
+    <select id="sort">
+      <optgroup label="Buzz">
+        <option value="hot">Hot right now (gaining audience fastest)</option>
+        <option value="watchers">Most watched / anticipated (MDL)</option>
+        <option value="vikif">Most followed on Viki</option>
+        <option value="imdbn">Most IMDb votes</option>
+      </optgroup>
+      <optgroup label="Scores">
+        <option value="avg">Average score (all sites)</option>
+        <option value="mdl">MyDramaList score</option>
+        <option value="viki">Viki score</option>
+        <option value="imdb">IMDb score</option>
+      </optgroup>
+      <optgroup label="Dates">
+        <option value="soon">Release date: soonest first</option>
+        <option value="new">Release date: newest first</option>
+        <option value="added">Recently added to tracker</option>
+      </optgroup>
+    </select>
+  </label>
+  <label>Year <select id="year"><option value="">Any</option></select></label>
+  <label>Chinese platform <select id="net"><option value="">Any</option></select></label>
+  <label>Watch in US <select id="us"><option value="">Any</option><option value="*">Streaming anywhere in US</option><option value="free">Free to watch in US</option></select></label>
+  <label class="check" title="Score sorts normally skip titles with very few ratings">
+    <input type="checkbox" id="few"> Include titles with few ratings</label>
+  <button id="reset" class="chip on" hidden>✕ Clear filters</button>
+  <div class="mine-filter" id="mineFilter" hidden>
+    <button data-s="" class="on">All</button><button data-s="want">Want to watch</button>
+    <button data-s="watching">Watching</button><button data-s="watched">Watched</button>
+    <button data-s="skip">Not interested</button>
+  </div>
+</section>
+<section class="genres" id="genres" aria-label="Genres"></section>
+
+<p class="count muted" id="count"></p>
+<main id="grid" class="grid"></main>
+<div id="sentinel"></div>
+<p id="empty" class="empty" hidden>Nothing matches these filters.</p>
+
+<footer class="muted">
+  Personal, non-commercial tracker. Data and posters: MyDramaList (via the open-source Kuryana API), Viki, IMDb datasets. US streaming availability: <a href="https://www.justwatch.com" target="_blank" rel="noopener noreferrer">JustWatch</a>.
+  Scores refresh once a day. Your list is saved only in this browser.
+</footer>
+
+<dialog id="modal"><div id="modalBody"></div></dialog>
+<script src="app.js"></script>
+</body>
+</html>
