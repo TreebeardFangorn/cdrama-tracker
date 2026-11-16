@@ -5,14 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<title>Cdrama Tracker</title>
+<title>Drama Tracker</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏮</text></svg>">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
   <div class="brand">
-    <h1>🏮 Cdrama Tracker</h1>
+    <h1>🏮 Drama Tracker</h1>
+    <div class="regions" id="regions" role="tablist" aria-label="Section">
+      <button data-region="cn">🇨🇳 Cdramas</button><button data-region="kr">🇰🇷 Kdramas</button>
+    </div>
     <span id="updated" class="muted"></span>
   </div>
   <input id="q" type="search" placeholder="Search title, actor, director, tag…" autocomplete="off">
@@ -49,7 +52,7 @@
     </select>
   </label>
   <label>Year <select id="year"><option value="">Any</option></select></label>
-  <label>Chinese platform <select id="net"><option value="">Any</option></select></label>
+  <label><span id="netLabel">Chinese platform</span> <select id="net"><option value="">Any</option></select></label>
   <label>Watch in US <select id="us"><option value="">Any</option><option value="*">Streaming anywhere in US</option><option value="free">Free to watch in US</option></select></label>
   <label class="check" title="Score sorts normally skip titles with very few ratings">
     <input type="checkbox" id="few"> Include titles with few ratings</label>

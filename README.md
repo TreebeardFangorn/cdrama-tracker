@@ -1,7 +1,11 @@
-# 🏮 Cdrama Tracker
+# 🏮 Drama Tracker (Cdramas + Kdramas)
 
-A private, free, self-updating website for finding and tracking Chinese dramas:
+A private, free, self-updating website for finding and tracking Chinese and Korean dramas:
 upcoming, airing now, and already released (2015 onward).
+
+The two are separate sections with a switch at the top. Each has its own data file
+(`docs/data/cn.json`, `docs/data/kr.json`), its own cache folder (`cache/cn`, `cache/kr`), its own
+people credits, and its own saved filters and personal list, so nothing from one appears in the other.
 
 ## What it shows
 
@@ -23,7 +27,7 @@ upcoming, airing now, and already released (2015 onward).
 
 ## How it stays fresh
 
-`scripts/update.py` (plain Python, no installs) rebuilds `docs/data/dramas.json`.
+`scripts/update.py` (plain Python, no installs) rebuilds `docs/data/cn.json` and `docs/data/kr.json`.
 On GitHub, `.github/workflows/refresh.yml` runs it once a day and commits the result,
 and GitHub Pages serves the `docs/` folder. Nothing needs to stay switched on.
 
@@ -36,7 +40,10 @@ Data sources, all free and key-less:
 | JustWatch (unofficial public API) | US streaming availability and watch links | attribution shown in the site footer; if it is down the last known availability is kept |
 | [IMDb non-commercial datasets](https://developer.imdb.com/non-commercial-datasets/) | IMDb score and votes | official; personal/non-commercial use only |
 
-Scope: mainland Chinese dramas only. Taiwanese and Hong Kong productions are excluded, and so is anything
+Scope (Kdramas): South Korean drama series; the overseas-only rule below does not apply to them, since
+Netflix and Disney+ originals are a core part of Korean drama.
+
+Scope (Cdramas): mainland Chinese dramas only. Taiwanese and Hong Kong productions are excluded, and so is anything
 released only on overseas platforms (Viki, Netflix, GTV, etc.; see `OVERSEAS` in `scripts/update.py`).
 
 Boys' love titles are also left out by personal preference (`EXCLUDE_TAGS` in `scripts/update.py`).

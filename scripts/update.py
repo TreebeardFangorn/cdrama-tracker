@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cdrama Tracker - daily data refresh.
 
-Pulls Chinese drama data from free, key-less sources and writes docs/data/dramas.json
+Pulls Chinese drama data from free, key-less sources and writes docs/data/cn.json and docs/data/kr.json
 for the static site. Python standard library only.
 
 Sources
@@ -13,9 +13,10 @@ Every source is optional: if one is down, the last cached values are kept.
 Incremental: results are cached in cache/ so a daily run only makes a few hundred requests.
 
 Environment knobs (all optional)
-  CDT_MAX_DETAIL   max drama detail requests per run   (default 900)
+  CDT_MAX_DETAIL   max drama detail requests per run   (default 1200, per region)
   CDT_MAX_PEOPLE   max people page requests per run    (default 60)
   CDT_SKIP_IMDB=1 / CDT_SKIP_VIKI=1   skip a source
+  CDT_REGIONS=cn,kr  which sections to refresh (default: all)
   CDT_FORCE_IMDB=1 re-download the big IMDb title list now (otherwise weekly)
 """
 import datetime as dt
@@ -43,9 +44,22 @@ FIRST_YEAR = 2015
 TODAY = dt.date.today()
 NOW = int(time.time())
 DAY = 86400
-MAX_DETAIL = int(os.environ.get("CDT_MAX_DETAIL", "900"))
+MAX_DETAIL = int(os.environ.get("CDT_MAX_DETAIL", "1200"))
 MAX_PEOPLE = int(os.environ.get("CDT_MAX_PEOPLE", "60"))
 MAX_POP_RANK = int(os.environ.get("CDT_MAX_POP_RANK", "20000"))  # MDL popularity rank cutoff
+
+
+# Each region is fetched, cached and published completely separately (own cache folder, own data file),
+# so titles and people from one can never show up in the other.
+REGIONS = {
+    "cn": {"label": "Chinese", "type": "Chinese Drama", "country": "China", "viki": "cn",
+           "viki_native": ("zh", "zt"), "overseas_rule": True},
+    "kr": {"label": "Korean", "type": "Korean Drama", "country": "South Korea", "viki": "kr",
+           "viki_native": ("ko",), "overseas_rule": False},
+}
+R = REGIONS["cn"]
+RKEY = "cn"
+CACHE_ROOT = CACHE
 
 
 def log(*a):
@@ -84,7 +98,8 @@ def load(name, default):
         return default
 
 
-def save(name, obj, folder=CACHE):
+def save(name, obj, folder=None):
+    folder = folder or CACHE
     os.makedirs(folder, exist_ok=True)
     tmp = os.path.join(folder, name + ".tmp")
     with open(tmp, "w", encoding="utf-8") as f:
@@ -110,7 +125,8 @@ def norm(s):
 
 
 def has_cjk(s):
-    return bool(re.search(r"[㐀-鿿]", s or ""))
+    """True if the text contains Chinese characters or Korean Hangul (i.e. a native-script title)."""
+    return bool(re.search(r"[㐀-鿿가-힯]", s or ""))
 
 
 def to_float(x):
@@ -171,7 +187,12 @@ NETWORKS = ["Tencent Video", "iQiyi", "Youku", "Mango TV", "Hunan TV", "CCTV", "
             "Dragon TV", "ZJTV", "JSTV", "Douyin", "Bilibili", "BTV", "LeTV", "Anhui TV", "Shenzhen TV",
             "LINE TV", "GTV", "Viki", "Netflix", "WeTV", "Migu Video", "Disney+", "PPTV", "Shandong TV",
             "Guangdong TV", "Tianjin TV", "Hubei TV", "Jiangxi TV", "Sichuan TV", "Hebei TV", "Xigua Video",
-            "Hong Guo", "Youku Tudou", "Tudou", "Amazon Prime", "Apple TV+", "Hulu", "Viu", "TVB"]
+            "Hong Guo", "Youku Tudou", "Tudou", "Amazon Prime", "Apple TV+", "Hulu", "Viu", "TVB",
+            # Korean broadcasters and streamers
+            "tvN", "JTBC", "SBS", "KBS2", "KBS1", "MBC", "ENA", "OCN", "TVING", "Wavve", "Coupang Play",
+            "Channel A", "TV Chosun", "MBN", "Genie TV", "U+ Mobile TV", "KakaoTV", "Naver TV", "Naver TV Cast",
+            "Olleh TV", "seezn", "Watcha", "SBS Plus", "MBC every1", "Dramax", "ViuTV", "Kocowa", "KBS Joy",
+            "tvN STORY", "SkyTV", "Channel S", "Lifetime", "Oksusu", "vLive", "YouTube", "Disney+ Hotstar"]
 
 
 # Platforms outside mainland China. A drama listed ONLY on these was made for overseas release.
@@ -226,7 +247,7 @@ def refresh_seasonal(seasonal):
             return key, None
         items = []
         for x in res:
-            if x.get("type") != "Chinese Drama" or not x.get("id"):
+            if x.get("type") != R["type"] or not x.get("id"):
                 continue
             items.append({k: x.get(k) for k in (
                 "id", "title", "url", "released", "rating", "ranked", "popularity",
@@ -275,7 +296,7 @@ def trim_detail(d):
         "director": list(dict.fromkeys(directors)),
         "screenwriter": list(dict.fromkeys(writers)),
         "related": [r.get("slug") for r in (oth.get("related_content") or [])
-                    if r.get("slug") and "Chinese" in (r.get("description") or "")],
+                    if r.get("slug") and R["label"] in (r.get("description") or "")],
         "genres": as_list(oth.get("genres")),
         "tags": [re.sub(r"\s*\(Vote tags\)", "", t) for t in as_list(oth.get("tags"))],
     }
@@ -412,7 +433,7 @@ def fetch_viki():
     out = []
     page = 1
     while page < 80:
-        res = get_json(f"{VIKI_API}/containers.json?app={VIKI_APP}&origin_country=cn"
+        res = get_json(f"{VIKI_API}/containers.json?app={VIKI_APP}&origin_country={R['viki']}"
                        f"&type=series&per_page=50&page={page}")
         if not res or not res.get("response"):
             if res is None and page == 1:
@@ -423,7 +444,7 @@ def fetch_viki():
             rs = c.get("review_stats") or {}
             out.append({
                 "id": c.get("id"),
-                "en": t.get("en"), "zh": t.get("zh"), "zt": t.get("zt"),
+                "en": t.get("en"), "native": [t[k] for k in R["viki_native"] if t.get(k)],
                 "aka": as_list((c.get("titles_aka") or {}).get("en")),
                 "score": to_float(rs.get("average_rating")), "count": rs.get("count"),
                 "followers": (c.get("subscriptions") or {}).get("count"),
@@ -441,7 +462,7 @@ def fetch_viki():
 def viki_index(viki):
     native, english = {}, {}
     for v in viki:
-        for s in [v.get("zh"), v.get("zt")] + [a for a in v["aka"] if has_cjk(a)]:
+        for s in (v.get("native") or [v.get("zh"), v.get("zt")]) + [a for a in v["aka"] if has_cjk(a)]:
             if s:
                 native.setdefault(norm(s), v)
         if v.get("en"):
@@ -450,6 +471,23 @@ def viki_index(viki):
 
 
 # ---------------------------------------------------------------- IMDb
+_IMDB = {}
+
+
+def imdb_basics_file():
+    """Download IMDb's title list once per run (it is large) and reuse it for every region."""
+    if "basics" not in _IMDB:
+        import shutil
+        import tempfile
+        path = os.path.join(tempfile.gettempdir(), "cdt_title_basics.tsv.gz")
+        req = urllib.request.Request("https://datasets.imdbws.com/title.basics.tsv.gz",
+                                     headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=600) as r, open(path, "wb") as f:
+            shutil.copyfileobj(r, f)
+        _IMDB["basics"] = path
+    return _IMDB["basics"]
+
+
 def build_imdb_map(dramas, imdb_map):
     """Match dramas to IMDb ids by title + year using the official title list (large download)."""
     log("IMDb: downloading title list (large, done weekly)...")
@@ -462,9 +500,7 @@ def build_imdb_map(dramas, imdb_map):
             if len(n) >= 2:
                 want.setdefault(n, []).append(d)
     cands = {}
-    req = urllib.request.Request("https://datasets.imdbws.com/title.basics.tsv.gz",
-                                 headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=600) as r, gzip.GzipFile(fileobj=r) as gz:
+    with gzip.open(imdb_basics_file(), "rb") as gz:
         for raw in io.TextIOWrapper(gz, encoding="utf-8", errors="replace"):
             p = raw.rstrip("\n").split("\t")
             if len(p) < 6 or p[1] not in ("tvSeries", "tvMiniSeries"):
@@ -508,11 +544,13 @@ def build_imdb_map(dramas, imdb_map):
 def fetch_imdb_ratings(ids):
     out = {}
     try:
-        data = gzip.decompress(http("https://datasets.imdbws.com/title.ratings.tsv.gz", timeout=300))
+        if "ratings" not in _IMDB:
+            _IMDB["ratings"] = gzip.decompress(
+                http("https://datasets.imdbws.com/title.ratings.tsv.gz", timeout=300)).decode("utf-8")
     except Exception as e:  # noqa: BLE001
         log("  ! IMDb ratings failed:", e)
         return None
-    for line in data.decode("utf-8").splitlines():
+    for line in _IMDB["ratings"].splitlines():
         p = line.split("\t")
         if p[0] in ids:
             out[p[0]] = [float(p[1]), int(p[2])]
@@ -521,7 +559,7 @@ def fetch_imdb_ratings(ids):
 
 # ---------------------------------------------------------------- JustWatch (US streaming availability)
 JW_QUERY_ONE = """q%d: popularTitles(country: US, filter: {searchQuery: $q%d, objectTypes: [SHOW]}, first: 5) {
-  edges { node { content(country: US, language: "en") { title originalTitle originalReleaseYear fullPath }
+  edges { node { content(country: US, language: "en") { title originalTitle originalReleaseYear externalIds { imdbId } }
     offers(country: US, platform: WEB) { monetizationType standardWebURL package { clearName } } } } }"""
 JW_KIND = {"FREE": "free", "ADS": "free", "FAST": "free", "FLATRATE": "sub",
            "FLATRATE_AND_BUY": "sub", "RENT": "rent", "BUY": "buy"}
@@ -584,16 +622,21 @@ def refresh_justwatch(dramas, jw):
                 continue
             for i, d in enumerate(group):
                 native = {norm(n) for n in [d.get("nt")] + d["_names"] if n and has_cjk(n)}
+                # JustWatch often lists Korean shows under a romanized title, so also accept any of the
+                # drama's known alternative titles, but only together with a matching year
+                names = {norm(n) for n in [d["t"]] + d["_names"] if n and len(norm(n)) >= 4}
+                tt = (d.get("imdb") or {}).get("id")
                 pick = None
                 for e in ((data.get(f"q{i}") or {}).get("edges") or []):
                     n = e["node"]
                     c = n.get("content") or {}
-                    if norm(c.get("originalTitle")) in native:
+                    if norm(c.get("originalTitle")) in native or (tt and (c.get("externalIds") or {}).get("imdbId") == tt):
                         pick = n
                         break
                     yr = c.get("originalReleaseYear")
-                    if (not pick and norm(c.get("title")) == norm(d["t"]) and has_cjk(c.get("originalTitle"))
-                            and d.get("y") and yr and abs(yr - d["y"]) <= 1):
+                    if (not pick and d.get("y") and yr and abs(yr - d["y"]) <= 1
+                            and (norm(c.get("originalTitle")) in names
+                                 or (norm(c.get("title")) in names and norm(c.get("title")) != norm(c.get("originalTitle"))))):
                         pick = n
                 best = {}
                 for o in (pick or {}).get("offers") or []:
@@ -611,7 +654,11 @@ def refresh_justwatch(dramas, jw):
 
 
 # ---------------------------------------------------------------- build
-def build():
+def build(region):
+    global R, RKEY, CACHE
+    RKEY, R = region, REGIONS[region]
+    CACHE = os.path.join(CACHE_ROOT, region)
+    log(f"\n===== {R['label']} dramas =====")
     os.makedirs(CACHE, exist_ok=True)
     seasonal = load("seasonal.json", {})
     details = load("details.json", {})
@@ -660,7 +707,7 @@ def build():
             d = {}
         if not s and not d:
             continue
-        if d and d.get("country") and d["country"] != "China":
+        if d and d.get("country") and d["country"] != R["country"]:
             continue
         if d and d.get("type") and d["type"] not in ("Drama",):
             continue
@@ -716,7 +763,7 @@ def build():
                 rec["mdl"][k] = None  # MDL placeholder rank for brand-new entries
         if EXCLUDE_TAGS & set((d.get("tags") or []) + (d.get("genres") or [])):
             continue
-        if rec["net"] and all(n in OVERSEAS for n in rec["net"]):
+        if R["overseas_rule"] and rec["net"] and all(n in OVERSEAS for n in rec["net"]):
             continue  # overseas-only release, not a mainland drama
         if cid not in first_seen:
             first_seen[cid] = TODAY.isoformat()
@@ -763,7 +810,7 @@ def build():
         save("viki.json", viki)
     else:
         viki = load("viki.json", [])
-    log(f"Viki: {len(viki)} Chinese series")
+    log(f"Viki: {len(viki)} {R['label']} series")
     v_native, v_en = viki_index(viki)
     used = set()
     # most-watched first, so when several dramas share a title the well-known one gets the match
@@ -874,17 +921,18 @@ def build():
 
     dramas.sort(key=lambda d: -(d["mdl"].get("w") or 0))
     out = {
+        "region": RKEY,
         "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "baseline": min(first_seen.values()) if first_seen else TODAY.isoformat(),
         "dramas": dramas,
         "people": ppl,
     }
-    save("dramas.json", out, OUT)
-    size = os.path.getsize(os.path.join(OUT, "dramas.json")) / 1e6
+    save(f"{RKEY}.json", out, OUT)
+    size = os.path.getsize(os.path.join(OUT, f"{RKEY}.json")) / 1e6
     by = {}
     for d in dramas:
         by[d["st"]] = by.get(d["st"], 0) + 1
-    log(f"Wrote docs/data/dramas.json ({size:.1f} MB): {by}")
+    log(f"Wrote docs/data/{RKEY}.json ({size:.1f} MB): {by}")
     missing = sum(1 for cid in cands if cid not in details)
     if missing:
         log(f"Note: {missing} titles still awaiting full details; they fill in over the next runs.")
@@ -892,6 +940,8 @@ def build():
 
 if __name__ == "__main__":
     try:
-        build()
+        only = [r for r in os.environ.get("CDT_REGIONS", "").split(",") if r in REGIONS]
+        for region in only or list(REGIONS):
+            build(region)
     except KeyboardInterrupt:
         sys.exit(1)

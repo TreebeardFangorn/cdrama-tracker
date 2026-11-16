@@ -1,4 +1,5 @@
-/* Cdrama Tracker - static front end. All data comes from data/dramas.json (rebuilt daily). */
+/* Drama Tracker - static front end. Two fully separate sections (Chinese / Korean), each with its own
+   data file (data/cn.json, data/kr.json), its own saved filters and its own personal list. */
 (() => {
   'use strict';
   const $ = (s, el = document) => el.querySelector(s);
@@ -16,11 +17,23 @@
     get(k, d) { try { return JSON.parse(localStorage.getItem('cdt.' + k)) ?? d; } catch { return d; } },
     set(k, v) { try { localStorage.setItem('cdt.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
   };
-  let mine = store.get('mine', {}); // id -> want | watching | watched | skip
+  const REGIONS = {
+    cn: { name: 'Cdramas', netLabel: 'Chinese platform', search: 'Search Chinese dramas: title, actor, director, tag…' },
+    kr: { name: 'Kdramas', netLabel: 'Korean network', search: 'Search Korean dramas: title, actor, director, tag…' },
+  };
+  let REGION = 'cn';
+  const rk = (k) => `${k}.${REGION}`; // every saved setting is kept per section
+  if (store.get('mine', null) && !store.get('mine.cn', null)) store.set('mine.cn', store.get('mine', {})); // carry over the pre-Kdrama list
+  if (store.get('ui', null) && !store.get('ui.cn', null)) store.set('ui.cn', store.get('ui', {}));
+  let mine = {}; // id -> want | watching | watched | skip
   const DEFAULT_SORT = { upcoming: 'watchers', airing: 'hot', hot: 'hot', released: 'mdl', mine: 'added', all: 'watchers' };
-  const state = Object.assign({ tab: 'upcoming', sort: {}, year: '', net: '', few: false, genres: [], q: '', mineS: '' }, store.get('ui', {}));
-  state.q = '';
-  if (!document.querySelector(`#tabs [data-tab="${state.tab}"]`)) state.tab = 'all';
+  let state = {};
+  function loadState() {
+    state = Object.assign({ tab: 'upcoming', sort: {}, year: '', net: '', us: '', few: false, genres: [], q: '', mineS: '' }, store.get(rk('ui'), {}));
+    state.q = '';
+    if (!document.querySelector(`#tabs [data-tab="${state.tab}"]`)) state.tab = 'all';
+    mine = store.get(rk('mine'), {});
+  }
   let list = [], shown = 0;
   const PAGE = 60;
 
@@ -158,7 +171,7 @@
     shown += chunk.length;
   }
   function render() {
-    store.set('ui', state);
+    store.set(rk('ui'), state);
     list = compute(); shown = 0;
     $('#grid').innerHTML = '';
     more();
@@ -196,6 +209,7 @@
   const US_MAIN = ['Netflix', 'Viki', 'WeTV', 'iQIYI', 'Amazon Prime Video', 'Tubi'];
   const usRank = (n) => { const i = US_MAIN.findIndex((m) => n.startsWith(m)); return i < 0 ? 99 : i; };
   function tryLinks(d) { // international apps of the original Chinese platform; availability not verified
+    if (REGION !== 'cn') return '';
     const q = encodeURIComponent(d.t), has = (n) => (d.us || []).some((o) => o[0].startsWith(n)), out = [];
     if ((d.net || []).includes('iQiyi') && !has('iQIYI')) out.push(['iQIYI (iq.com)', `https://www.iq.com/search?query=${q}`]);
     if ((d.net || []).includes('Tencent Video') && !has('WeTV')) out.push(['WeTV', `https://wetv.vip/en/search/${q}`]);
@@ -248,7 +262,7 @@
           <a class="btn" href="${esc(safeUrl(d.url))}" target="_blank" rel="noopener noreferrer">MyDramaList page</a>
           ${d.viki?.u ? `<a class="btn" href="${esc(safeUrl(d.viki.u))}" target="_blank" rel="noopener noreferrer">${d.viki.tr ? 'Watch / trailers on Viki' : 'Viki page'}</a>` : ''}
           <a class="btn" href="${esc(imdbUrl)}" target="_blank" rel="noopener noreferrer">${d.imdb ? 'IMDb page' : 'Search IMDb'}</a>
-          ${d.nt ? `<a class="btn" href="https://search.douban.com/movie/subject_search?search_text=${q(d.nt)}" target="_blank" rel="noopener noreferrer">Douban 豆瓣</a>` : ''}
+          ${d.nt && REGION === 'cn' ? `<a class="btn" href="https://search.douban.com/movie/subject_search?search_text=${q(d.nt)}" target="_blank" rel="noopener noreferrer">Douban 豆瓣</a>` : ''}
         </div>
         ${sect('Main stars', d.cast)}${sect(d.dir && d.dir.length > 1 ? 'Directors' : 'Director', d.dir)}${sect(d.wri && d.wri.length > 1 ? 'Screenwriters' : 'Screenwriter', d.wri)}
         ${!d.cast && !d.dir ? '<p class="muted">Cast and crew have not been announced or loaded yet.</p>' : ''}
@@ -261,7 +275,7 @@
     m.dataset.id = id;
     if (!m.open) m.showModal();
     m.scrollTop = 0;
-    if (push) history.replaceState(null, '', '#d=' + id);
+    if (push) history.replaceState(null, '', `#${REGION}/d=${id}`);
   }
   function closeModal() {
     const m = $('#modal');
@@ -269,11 +283,12 @@
   }
   function setMine(id, v) {
     if (mine[id] === v || !v) delete mine[id]; else mine[id] = v;
-    store.set('mine', mine);
+    store.set(rk('mine'), mine);
   }
 
   // ---------- events
   function wire() {
+    $('#regions').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && b.dataset.region !== REGION) loadRegion(b.dataset.region); });
     $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { state.tab = b.dataset.tab; render(); window.scrollTo({ top: 0 }); } });
     $('#sort').addEventListener('change', (e) => { state.sort[state.tab] = e.target.value; render(); });
     $('#year').addEventListener('change', (e) => { state.year = e.target.value; render(); });
@@ -305,7 +320,7 @@
       if (tr) { setMine(m.dataset.id, tr.dataset.track); openModal(m.dataset.id); m.dataset.dirty = '1'; }
     });
     m.addEventListener('close', () => {
-      history.replaceState(null, '', location.pathname + location.search);
+      history.replaceState(null, '', '#' + REGION);
       if (m.dataset.dirty) { delete m.dataset.dirty; const y = window.scrollY, n = shown; render(); while (shown < n) more(); window.scrollTo({ top: y }); }
     });
     new IntersectionObserver((en) => { if (en[0].isIntersecting) more(); }, { rootMargin: '900px' }).observe($('#sentinel'));
@@ -320,33 +335,61 @@
     $('#genres').innerHTML = g.map(([name]) => `<button class="chip" data-g="${esc(name)}">${esc(name)}</button>`).join('');
     state.genres = state.genres.filter((x) => g.some(([n]) => n === x));
     const years = [...new Set(DATA.dramas.map((d) => d.y).filter(Boolean))].sort((a, b) => b - a);
+    $('#year').innerHTML = '<option value="">Any</option>';
     $('#year').insertAdjacentHTML('beforeend', years.map((y) => `<option>${y}</option>`).join(''));
     const nets = [...count(DATA.dramas.flatMap((d) => d.net || []))].filter(([, n]) => n >= 8).sort((a, b) => b[1] - a[1]).slice(0, 25);
+    $('#net').innerHTML = '<option value="">Any</option>';
     $('#net').insertAdjacentHTML('beforeend', nets.map(([n, c]) => `<option value="${esc(n)}">${esc(n)} (${c})</option>`).join(''));
     if (state.net && !nets.some(([n]) => n === state.net)) state.net = '';
     const us = [...count(DATA.dramas.flatMap((d) => (d.us || []).map((o) => o[0])))].filter(([, n]) => n >= 5).sort((a, b) => b[1] - a[1]).slice(0, 20);
+    $$('#us option').slice(3).forEach((o) => o.remove());
     $('#us').insertAdjacentHTML('beforeend', us.map(([n, c]) => `<option value="${esc(n)}">${esc(n)} (${c})</option>`).join(''));
     if (state.us && !['*', 'free'].includes(state.us) && !us.some(([n]) => n === state.us)) state.us = '';
     if (state.year && !years.includes(+state.year)) state.year = '';
   }
 
-  async function init() {
-    wire();
+  const loaded = {}; // region -> data, so switching back and forth does not re-download
+  async function loadRegion(region, openId) {
+    REGION = REGIONS[region] ? region : 'cn';
+    store.set('region', REGION);
+    closeModal();
+    history.replaceState(null, '', '#' + REGION);
+    loadState();
+    $('#q').value = '';
+    $('#q').placeholder = REGIONS[REGION].search;
+    $('#netLabel').textContent = REGIONS[REGION].netLabel;
+    $$('#regions button').forEach((b) => b.classList.toggle('on', b.dataset.region === REGION));
+    document.title = `${REGIONS[REGION].name} · Drama Tracker`;
+    byId.clear(); DATA = { dramas: [], people: {} };
+    $('#grid').innerHTML = ''; $('#count').textContent = ''; $('#updated').textContent = 'Loading…'; $('#empty').hidden = true;
+    const want = REGION;
     try {
-      const r = await fetch('data/dramas.json', { cache: 'no-cache' });
-      if (!r.ok) throw new Error(r.status);
-      DATA = await r.json();
+      if (!loaded[want]) {
+        const r = await fetch(`data/${want}.json`, { cache: 'no-cache' });
+        if (!r.ok) throw new Error(r.status);
+        const j = await r.json();
+        if (j.region !== want) throw new Error('wrong section in data file'); // never show one section's data in the other
+        loaded[want] = j;
+      }
     } catch (e) {
-      $('#empty').hidden = false; $('#empty').textContent = 'Could not load drama data. Try refreshing in a minute.';
+      if (REGION !== want) return;
+      $('#updated').textContent = '';
+      $('#empty').hidden = false; $('#empty').textContent = `Could not load ${REGIONS[want].name} data. Try refreshing in a minute.`;
       return;
     }
+    if (REGION !== want) return; // the other section was chosen while this one was loading
+    DATA = loaded[want];
     DATA.dramas.forEach((d) => byId.set(d.id, d));
     const gen = new Date(DATA.generated);
     $('#updated').textContent = `Updated ${gen.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${gen.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ${DATA.dramas.length.toLocaleString()} dramas`;
     setupFilters();
     render();
-    const m = location.hash.match(/^#d=(\d+)/);
-    if (m) openModal(m[1], false);
+    if (openId) openModal(openId);
+  }
+  function init() {
+    wire();
+    const m = location.hash.match(/^#(cn|kr)?\/?(?:d=(\d+))?/) || [];
+    loadRegion(m[1] || store.get('region', 'cn'), m[2]);
   }
   init();
 })();

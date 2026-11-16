@@ -17,6 +17,9 @@ button, select, input { font: inherit; color: inherit; }
 .brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 h1 { font-size: 22px; margin: 0; letter-spacing: .2px; }
 #updated { font-size: 12.5px; }
+.regions { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.regions button { border: 0; background: none; color: var(--muted); font-weight: 700; padding: 7px 16px; border-radius: 999px; cursor: pointer; font-size: 14.5px; white-space: nowrap; }
+.regions button.on { background: var(--accent); color: #fff; }
 #q { flex: 1 1 260px; max-width: 460px; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--panel); outline: none; }
 #q:focus { border-color: var(--accent); }
